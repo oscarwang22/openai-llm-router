@@ -286,9 +286,6 @@ async function proxyStreamWithFallback(originalBody, reqPath, res) {
         "Access-Control-Expose-Headers": "X-Provider, X-Provider-Model, X-Provider-Name, X-Router-Model",
       });
 
-      // Send model tracking as SSE comment (OpenAI clients ignore comments)
-      res.write(`: router_model=${provider.model} router_provider=${provider.id}\n\n`);
-
       if (!resp.body) {
         throw new Error("No response body for streaming");
       }
