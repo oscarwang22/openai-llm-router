@@ -1,0 +1,30 @@
+{
+  "name": "openai-llm-router",
+  "version": "1.0.0",
+  "description": "OpenAI-compatible LLM router with automatic fallback: Kilo Gateway (particle-1:free) → OpenCode Zen (tidepool-alpha-free) → NVIDIA NIM (minimax-m3.1-flash)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node src/test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "openai",
+    "llm",
+    "router",
+    "proxy",
+    "kilo",
+    "opencode",
+    "nvidia-nim",
+    "failover"
+  ]
+}
