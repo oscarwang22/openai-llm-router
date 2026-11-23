@@ -31,6 +31,7 @@ const PROVIDERS = [
     apiKey: process.env.KILO_API_KEY || "",
     model: process.env.KILO_MODEL || "particle-ai/particle-1:free",
     displayModel: "particle-ai/particle-1:free",
+    timeoutMs: parseInt(process.env.KILO_TIMEOUT_MS || "30000", 10),
     docs: "https://docs.particle.ai",
   },
   {
@@ -40,6 +41,7 @@ const PROVIDERS = [
     apiKey: process.env.OPENCODE_API_KEY || "",
     model: process.env.OPENCODE_MODEL || "tidepool-alpha-free",
     displayModel: "tidepool-alpha-free",
+    timeoutMs: parseInt(process.env.OPENCODE_TIMEOUT_MS || "30000", 10),
     docs: "https://opencode.ai/docs/console/models/",
   },
   {
@@ -49,6 +51,7 @@ const PROVIDERS = [
     apiKey: process.env.NVIDIA_API_KEY || "",
     model: process.env.NVIDIA_MODEL || "minimaxai/minimax-m3.1-flash",
     displayModel: "minimaxai/minimax-m3.1-flash",
+    timeoutMs: parseInt(process.env.NVIDIA_TIMEOUT_MS || process.env.REQUEST_TIMEOUT_MS || "240000", 10),
     docs: "https://build.nvidia.com/minimaxai/minimax-m3.1-flash",
   },
 ];
@@ -133,7 +136,8 @@ async function proxyWithFallback(originalBody, reqPath, isStream = false) {
     log("info", `Attempt ${i + 1}/${PROVIDERS.length}: ${provider.name} (${provider.id}) -> ${url} model=${provider.model} stream=${isStream}`);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const perProviderTimeout = provider.timeoutMs || REQUEST_TIMEOUT_MS;
+    const timeout = setTimeout(() => controller.abort(), perProviderTimeout);
 
     try {
       const headers = {
@@ -193,7 +197,7 @@ async function proxyWithFallback(originalBody, reqPath, isStream = false) {
     } catch (err) {
       clearTimeout(timeout);
       const isAbort = err.name === "AbortError";
-      const msg = isAbort ? `Timeout after ${REQUEST_TIMEOUT_MS}ms` : err.message;
+      const msg = isAbort ? `Timeout after ${provider.timeoutMs || REQUEST_TIMEOUT_MS}ms` : err.message;
       log("warn", `✗ Network/timeout error with ${provider.name} (${provider.id}): ${msg}`);
       errors.push({
         provider: provider.id,
@@ -295,10 +299,10 @@ async function proxyStreamWithFallback(originalBody, reqPath, res) {
       const resetIdle = () => {
         if (idleTimeout) clearTimeout(idleTimeout);
         idleTimeout = setTimeout(() => {
-          log("warn", `Stream idle timeout (${REQUEST_TIMEOUT_MS}ms) for ${provider.name} - aborting stream`);
+          log("warn", `Stream idle timeout (${perProviderTimeout}ms) for ${provider.name} - aborting stream`);
           try { reader.cancel("idle timeout"); } catch {}
           try { if (!res.writableEnded) res.end(); } catch {}
-        }, REQUEST_TIMEOUT_MS);
+        }, perProviderTimeout);
       };
       resetIdle();
 
