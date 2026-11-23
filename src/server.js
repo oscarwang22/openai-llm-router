@@ -241,8 +241,9 @@ async function proxyStreamWithFallback(originalBody, reqPath, res) {
 
     log("info", `Stream attempt ${i + 1}/${PROVIDERS.length}: ${provider.name} -> ${url}`);
 
+    const perProviderTimeout = provider.timeoutMs || REQUEST_TIMEOUT_MS;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), perProviderTimeout);
 
     try {
       const resp = await fetch(url, {
@@ -325,7 +326,7 @@ async function proxyStreamWithFallback(originalBody, reqPath, res) {
       return { success: true, provider };
     } catch (err) {
       clearTimeout(timeout);
-      const msg = err.name === "AbortError" ? `Timeout after ${REQUEST_TIMEOUT_MS}ms` : err.message;
+      const msg = err.name === "AbortError" ? `Timeout after ${perProviderTimeout}ms` : err.message;
       log("warn", `Stream network error ${provider.name}: ${msg}`);
       errors.push({
         provider: provider.id,
