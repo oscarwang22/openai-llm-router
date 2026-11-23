@@ -20,7 +20,7 @@ app.use("/console", express.static(path.join(__dirname, "..", "public")));
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const HOST = process.env.HOST || "0.0.0.0";
 const ROUTER_API_KEY = process.env.ROUTER_API_KEY || "";
-const REQUEST_TIMEOUT_MS = parseInt(process.env.REQUEST_TIMEOUT_MS || "60000", 10);
+const REQUEST_TIMEOUT_MS = parseInt(process.env.REQUEST_TIMEOUT_MS || "240000", 10);
 
 // Provider configs in fallback order
 const PROVIDERS = [
@@ -271,7 +271,7 @@ async function proxyStreamWithFallback(originalBody, reqPath, res) {
         continue;
       }
 
-      // Success - pipe the stream
+      // Success - pipe the stream with idle timeout protection
       log("info", `✓ Streaming from ${provider.name} (${provider.id})`);
 
       // Set SSE headers - include model for tracking
@@ -294,20 +294,30 @@ async function proxyStreamWithFallback(originalBody, reqPath, res) {
       }
 
       const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
+      let idleTimeout;
+      const resetIdle = () => {
+        if (idleTimeout) clearTimeout(idleTimeout);
+        idleTimeout = setTimeout(() => {
+          log("warn", `Stream idle timeout (${REQUEST_TIMEOUT_MS}ms) for ${provider.name} - aborting stream`);
+          try { reader.cancel("idle timeout"); } catch {}
+          try { if (!res.writableEnded) res.end(); } catch {}
+        }, REQUEST_TIMEOUT_MS);
+      };
+      resetIdle();
 
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          resetIdle();
           if (value) {
             res.write(value);
-            // Also handle if client disconnects
             if (res.writableEnded) break;
           }
         }
       } finally {
-        reader.releaseLock();
+        if (idleTimeout) clearTimeout(idleTimeout);
+        try { reader.releaseLock(); } catch {}
       }
 
       res.end();
@@ -324,10 +334,18 @@ async function proxyStreamWithFallback(originalBody, reqPath, res) {
         error: msg,
         networkError: true,
       });
-      // If we already started sending headers, we can't fallback
+      // If we already started sending headers, we can't fallback - send SSE error then close
       if (res.headersSent) {
-        log("error", "Headers already sent, cannot fallback mid-stream");
-        if (!res.writableEnded) res.end();
+        log("error", "Headers already sent, cannot fallback mid-stream - sending SSE error");
+        try {
+          if (!res.writableEnded) {
+            // Send OpenAI-compatible SSE error so clients like OpenCode can display it
+            const errPayload = JSON.stringify({ error: { message: `Provider ${provider.name} failed mid-stream: ${msg}`, type: "provider_error", code: "stream_failed" } });
+            res.write(`data: ${errPayload}\n\n`);
+            res.write(`data: [DONE]\n\n`);
+            res.end();
+          }
+        } catch {}
         return { success: false, errors, midStream: true };
       }
       continue;
