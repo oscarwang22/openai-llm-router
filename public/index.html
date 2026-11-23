@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LLM Router — Live Console</title>
+<style>
+  :root { --bg:#0a0a0a; --card:#171717; --border:#262626; --text:#fafafa; --muted:#a3a3a3; --accent:#fff; --kilo:#3b82f6; --opencode:#10b981; --nvidia:#76b900; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; background:var(--bg); color:var(--text); }
+  header { border-bottom:1px solid var(--border); padding:16px 24px; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:rgba(10,10,10,0.8); backdrop-filter:blur(8px); }
+  .logo { font-weight:700; letter-spacing:-0.02em; display:flex; gap:10px; align-items:center; }
+  .badge { font-size:11px; border:1px solid var(--border); padding:4px 8px; border-radius:20px; color:var(--muted); }
+  main { max-width:1100px; margin:0 auto; padding:24px; display:grid; grid-template-columns: 1fr 360px; gap:24px; }
+  @media(max-width:900px){ main{grid-template-columns:1fr} }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; }
+  h2 { font-size:14px; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); margin:0 0 14px 0; }
+  .chain { display:flex; flex-direction:column; gap:10px; }
+  .step { display:flex; gap:12px; align-items:center; padding:12px; border-radius:12px; border:1px solid var(--border); background:#111; }
+  .step .n { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:#fff; flex-shrink:0; }
+  .s1 .n{ background:var(--kilo); } .s2 .n{ background:var(--opencode); } .s3 .n{ background:var(--nvidia); } .s4 .n{ background:#444; }
+  .step strong{ font-size:14px; } .step small{ color:var(--muted); font-size:12px; }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:#22c55e; display:inline-block; margin-right:6px; }
+  textarea, input, select { width:100%; background:#0a0a0a; border:1px solid var(--border); color:var(--text); border-radius:10px; padding:12px; font-size:14px; font-family: inherit; }
+  textarea:focus, input:focus { outline:none; border-color:#525252; }
+  button { background:var(--accent); color:#000; border:none; padding:12px 18px; border-radius:10px; font-weight:600; cursor:pointer; font-size:14px; width:100%; }
+  button:hover{ opacity:0.9; }
+  button:disabled{ opacity:0.5; cursor:not-allowed; }
+  .log { background:#000; border-radius:10px; padding:12px; font-family: ui-monospace, monospace; font-size:12px; max-height:420px; overflow:auto; white-space:pre-wrap; word-break:break-word; border:1px solid var(--border); }
+  .tag { font-size:11px; padding:3px 7px; border-radius:20px; border:1px solid var(--border); color:var(--muted); }
+  .endpoint { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #222; font-size:13px; }
+  .endpoint:last-child{border:none}
+  code{ background:#222; padding:2px 6px; border-radius:6px; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🔀 LLM Router <span class="badge">OPENAI COMPATIBLE</span></div>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <span style="font-size:13px; color:var(--muted);"><span class="status-dot"></span> Live on :3000</span>
+    <a href="/health" style="color:var(--text); font-size:13px; text-decoration:none; border:1px solid var(--border); padding:6px 12px; border-radius:8px;">Health →</a>
+    <a href="/v1/models" style="color:var(--text); font-size:13px; text-decoration:none; border:1px solid var(--border); padding:6px 12px; border-radius:8px;">Models →</a>
+  </div>
+</header>
+
+<main>
+  <div style="display:flex; flex-direction:column; gap:24px;">
+    <div class="card">
+      <h2>Fallback Chain</h2>
+      <div class="chain">
+        <div class="step s1"><div class="n">1</div><div><strong>Kilo Gateway</strong> — particle-ai/particle-1:free<br><small>https://api.kilo.ai/api/gateway • 1M context • Free</small></div><span class="tag" style="margin-left:auto;">primary</span></div>
+        <div class="step s2"><div class="n">2</div><div><strong>OpenCode Zen</strong> — tidepool-alpha-free<br><small>https://opencode.ai/zen/v1 • 1M context • Free</small></div><span class="tag" style="margin-left:auto;">fallback</span></div>
+        <div class="step s3"><div class="n">3</div><div><strong>NVIDIA NIM</strong> — minimaxai/minimax-m3.1-flash<br><small>https://integrate.api.nvidia.com/v1 • 40 RPM free</small></div><span class="tag" style="margin-left:auto;">fallback</span></div>
+        <div class="step s4"><div class="n">!</div><div><strong>All failed → Error</strong><br><small>Returns “All endpoints were tried and failed” with diagnostics</small></div></div>
+      </div>
+      <p style="color:var(--muted); font-size:12px; margin-top:12px;">On any 429 / 5xx / 401 / timeout / network error, the router auto-retries the next provider. Streaming falls back only before the first byte.</p>
+    </div>
+
+    <div class="card">
+      <h2>Playground</h2>
+      <label style="font-size:12px; color:var(--muted);">System Prompt</label>
+      <input id="system" placeholder="You are a helpful assistant..." value="You are a helpful assistant." style="margin:6px 0 12px 0;" />
+      <label style="font-size:12px; color:var(--muted);">User Message</label>
+      <textarea id="prompt" rows="3" placeholder="Type your message...">Write a haiku about routers and fallbacks</textarea>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin:12px 0;">
+        <div><label style="font-size:12px; color:var(--muted);">Model</label><input id="model" value="router-auto" /></div>
+        <div><label style="font-size:12px; color:var(--muted);">Stream</label><select id="stream"><option value="false">Non-streaming</option><option value="true">Streaming</option></select></div>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
+        <div><label style="font-size:12px; color:var(--muted);">Temperature</label><input id="temp" type="number" min="0" max="2" step="0.1" value="0.7" /></div>
+        <div><label style="font-size:12px; color:var(--muted);">Max Tokens</label><input id="maxTok" type="number" value="500" /></div>
+      </div>
+      <button id="send">▶ Send via Router</button>
+      <div id="out" class="log" style="margin-top:12px; display:none;"></div>
+    </div>
+
+    <div class="card">
+      <h2>SDK Examples</h2>
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button onclick="show('py')" id="b-py" style="width:auto; padding:6px 12px; font-size:12px; background:#fff; color:#000;">Python</button>
+        <button onclick="show('js')" id="b-js" style="width:auto; padding:6px 12px; font-size:12px; background:#222; color:#aaa; border:1px solid #333;">Node.js</button>
+        <button onclick="show('curl')" id="b-curl" style="width:auto; padding:6px 12px; font-size:12px; background:#222; color:#aaa; border:1px solid #333;">cURL</button>
+      </div>
+      <pre id="code-py" style="background:#000; color:#e5e5e5; padding:14px; border-radius:10px; font-size:12px; overflow:auto; margin:0;">from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:3000/v1",
+    api_key="sk-router"  # or ROUTER_API_KEY
+)
+
+resp = client.chat.completions.create(
+    model="router-auto",
+    messages=[
+      {"role": "system", "content": "You are helpful."},
+      {"role": "user", "content": "Hello!"}
+    ],
+    temperature=0.7
+)
+print(resp.choices[0].message.content)
+# Check routing: resp is from first healthy provider</pre>
+      <pre id="code-js" style="display:none; background:#000; color:#e5e5e5; padding:14px; border-radius:10px; font-size:12px; overflow:auto; margin:0;">import OpenAI from "openai";
+const client = new OpenAI({
+  baseURL: "http://localhost:3000/v1",
+  apiKey: "sk-router",
+});
+const res = await client.chat.completions.create({
+  model: "router-auto",
+  messages: [{ role: "user", content: "Hello!" }],
+});
+console.log(res.choices[0].message.content);</pre>
+      <pre id="code-curl" style="display:none; background:#000; color:#e5e5e5; padding:14px; border-radius:10px; font-size:12px; overflow:auto; margin:0;">curl http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "router-auto",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "stream": false
+  }'</pre>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:24px;">
+    <div class="card">
+      <h2>Live Status</h2>
+      <div id="health" style="font-size:13px; color:var(--muted);">Loading...</div>
+      <div id="healthDetails" style="margin-top:10px; font-size:12px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Endpoints</h2>
+      <div class="endpoint"><code>POST /v1/chat/completions</code><span class="tag">main</span></div>
+      <div class="endpoint"><code>POST /v1/completions</code><span class="tag">legacy</span></div>
+      <div class="endpoint"><code>POST /v1/responses</code><span class="tag">new</span></div>
+      <div class="endpoint"><code>GET /v1/models</code><span class="tag">list</span></div>
+      <div class="endpoint"><code>GET /health</code><span class="tag">health</span></div>
+      <div style="margin-top:12px; font-size:12px; color:var(--muted);">Success responses include <code>X-Provider</code> and <code>X-Provider-Model</code> headers.</div>
+    </div>
+
+    <div class="card" style="background:#111;">
+      <h2 style="color:#fff;">Error Behavior</h2>
+      <p style="font-size:13px; color:#a3a3a3; margin-top:0;">When all 3 providers fail, the router returns:</p>
+      <pre style="background:#000; color:#f87171; padding:12px; border-radius:8px; font-size:11px; overflow:auto;">{
+  "error": {
+    "message": "All endpoints were tried and failed...",
+    "type": "all_endpoints_failed",
+    "code": "all_endpoints_failed",
+    "attempted_providers": [
+      "kilo-gateway",
+      "opencode-zen",
+      "nvidia-nim"
+    ],
+    "details": [ ...per-provider errors... ]
+  }
+}</pre>
+      <p style="font-size:12px; color:#737373;">HTTP 502 • Includes per-provider status codes for debugging</p>
+    </div>
+
+    <div class="card">
+      <h2>Quick Test</h2>
+      <button onclick="quickTest()" id="qt" style="background:#222; color:#fff; border:1px solid #333;">Run health + chat test</button>
+      <pre id="qtOut" style="display:none; background:#000; color:#e5e5e5; padding:12px; border-radius:8px; font-size:11px; overflow:auto; max-height:300px; margin-top:10px;"></pre>
+    </div>
+  </div>
+</main>
+
+<script>
+function show(which){
+  document.getElementById('code-py').style.display = which==='py'?'block':'none';
+  document.getElementById('code-js').style.display = which==='js'?'block':'none';
+  document.getElementById('code-curl').style.display = which==='curl'?'block':'none';
+  document.getElementById('b-py').style.background = which==='py'?'#fff':'#222';
+  document.getElementById('b-py').style.color = which==='py'?'#000':'#aaa';
+  document.getElementById('b-js').style.background = which==='js'?'#fff':'#222';
+  document.getElementById('b-js').style.color = which==='js'?'#000':'#aaa';
+  document.getElementById('b-curl').style.background = which==='curl'?'#fff':'#222';
+  document.getElementById('b-curl').style.color = which==='curl'?'#000':'#aaa';
+}
+
+async function loadHealth(){
+  try{
+    const r = await fetch('/health');
+    const j = await r.json();
+    document.getElementById('health').innerHTML = `<span style="color:#22c55e;">●</span> <strong style="color:#fff;">${j.status.toUpperCase()}</strong> — ${j.fallbackOrder.length} providers configured`;
+    document.getElementById('healthDetails').innerHTML = j.providers.map(p=>`
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #222;">
+        <span>${p.name}<br><small style="color:var(--muted);">${p.model}</small></span>
+        <span style="font-size:11px; padding:4px 8px; border-radius:20px; background:${p.hasKey?'#052e16':'#450a0a'}; color:${p.hasKey?'#4ade80':'#fca5a5'}; border:1px solid ${p.hasKey?'#14532d':'#7f1d1d'}">${p.hasKey?'✓ key set':'✗ no key'}</span>
+      </div>
+    `).join('') + `<div style="margin-top:8px; color:var(--muted); font-size:11px;">Timeout: ${j.config.timeoutMs}ms • Auth: ${j.config.authRequired?'required':'open'}</div>`;
+  }catch(e){
+    document.getElementById('health').textContent = 'Failed to load: '+e.message;
+  }
+}
+loadHealth();
+
+document.getElementById('send').onclick = async () => {
+  const btn = document.getElementById('send');
+  const out = document.getElementById('out');
+  btn.disabled = true; btn.textContent = '⏳ Routing...';
+  out.style.display='block'; out.textContent = 'Routing through fallback chain...\n  1 → Kilo Gateway (particle-1:free)\n  2 → OpenCode Zen (tidepool-alpha-free) if 1 fails\n  3 → NVIDIA NIM (minimax-m3.1-flash) if 2 fails\n\nSending request...\n';
+
+  const body = {
+    model: document.getElementById('model').value || 'router-auto',
+    messages: [
+      { role:'system', content: document.getElementById('system').value },
+      { role:'user', content: document.getElementById('prompt').value }
+    ],
+    temperature: parseFloat(document.getElementById('temp').value),
+    max_tokens: parseInt(document.getElementById('maxTok').value),
+    stream: document.getElementById('stream').value === 'true'
+  };
+
+  try{
+    const resp = await fetch('/v1/chat/completions', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+
+    const provider = resp.headers.get('x-provider');
+    const pModel = resp.headers.get('x-provider-model');
+    out.textContent += `\n← ${resp.status} ${resp.statusText}\n   X-Provider: ${provider || '—'}\n   X-Model: ${pModel || '—'}\n\n`;
+
+    if(body.stream && resp.ok){
+      out.textContent += '🌊 Streaming:\n---\n';
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      while(true){
+        const {done, value} = await reader.read();
+        if(done) break;
+        const chunk = decoder.decode(value);
+        // Parse SSE
+        chunk.split('\n').forEach(line=>{
+          if(line.startsWith('data: ') && !line.includes('[DONE]')){
+            try{
+              const j = JSON.parse(line.slice(6));
+              const delta = j.choices?.[0]?.delta?.content || '';
+              if(delta) out.textContent += delta;
+            }catch{}
+          }
+        });
+        out.scrollTop = out.scrollHeight;
+      }
+      out.textContent += '\n---\n✓ Stream complete';
+    } else {
+      const j = await resp.json();
+      out.textContent += JSON.stringify(j, null, 2);
+      if(j.error && j.error.message?.includes('All endpoints were tried and failed')){
+        out.textContent += '\n\n⚠️ All 3 providers failed — check .env keys and /health';
+      } else if(resp.ok){
+        out.textContent += `\n\n✓ Success via ${provider}`;
+      }
+    }
+  }catch(e){
+    out.textContent += '\n❌ Error: '+e.message;
+  }
+  btn.disabled=false; btn.textContent='▶ Send via Router';
+  out.scrollTop = out.scrollHeight;
+};
+
+async function quickTest(){
+  const o = document.getElementById('qtOut');
+  o.style.display='block'; o.textContent='Running...\n';
+  const log = (m)=> o.textContent += m+'\n';
+  try{
+    const h = await fetch('/health').then(r=>r.json());
+    log('✓ Health: '+h.status+' providers='+h.fallbackOrder.join(' → '));
+    const m = await fetch('/v1/models').then(r=>r.json());
+    log('✓ Models: '+m.data.length+' entries');
+    const c = await fetch('/v1/chat/completions', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model:'router-auto', messages:[{role:'user', content:'Hi'}]})}).then(r=>r.json());
+    if(c.error) log('✗ Chat: '+c.error.message.slice(0,200));
+    else log('✓ Chat: '+JSON.stringify(c).slice(0,400));
+  }catch(e){ log('❌ '+e.message); }
+}
+</script>
+</body>
+</html>
