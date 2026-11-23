@@ -1,4 +1,4 @@
-# 🔀 OpenAI-Compatible LLM Router with Fallback
+# OpenAI-Compatible LLM Router with Fallback
 
 An OpenAI-compatible proxy that automatically routes requests through multiple inference providers with **fallback**:
 
